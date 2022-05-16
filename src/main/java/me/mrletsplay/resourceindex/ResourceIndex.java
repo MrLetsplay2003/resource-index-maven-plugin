@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -34,10 +35,16 @@ public class ResourceIndex extends AbstractMojo {
 	private String targetPath;
 
 	/**
-	 * Wether to append to an existing resource index file instead of replacing it
+	 * Whether to append to an existing resource index file instead of replacing it
 	 */
 	@Parameter(defaultValue = "false", property = "appendIfExists", required = true)
 	private boolean appendIfExists;
+
+	/**
+	 * A list of resources to exclude. This must contain the final target paths to the resources
+	 */
+	@Parameter(property = "excludes", required = true)
+	private String[] excludes = new String[0];
 
 	/**
 	 * The project to get the JavaFX dependencies from
@@ -47,6 +54,8 @@ public class ResourceIndex extends AbstractMojo {
 
 	@Override
 	public void execute() throws MojoExecutionException {
+		List<String> excludeList = Arrays.asList(excludes);
+
 		List<String> resources = new ArrayList<>();
 		for(Resource r : mavenProject.getResources()) {
 			getLog().info("Reading resources from " + r.getDirectory());
@@ -65,8 +74,10 @@ public class ResourceIndex extends AbstractMojo {
 					Path absolute = f.toAbsolutePath(); // Absolute path to the resource on disk
 					if(file.isFile()) {
 						if(!include.test(absolute.toString()) || exclude.test(absolute.toString())) return;
+						String targetPath = target.resolve(relative).toString();
+						if(excludeList.contains(targetPath)) return;
 						getLog().info("- " + path.relativize(f));
-						resources.add(target.resolve(relative).toString()); // Add the path relative to the JAR root (targetDir/relative)
+						resources.add(targetPath); // Add the path relative to the JAR root (targetDir/relative)
 					}
 				});
 			} catch (IOException e) {
