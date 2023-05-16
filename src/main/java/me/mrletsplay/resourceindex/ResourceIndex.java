@@ -10,10 +10,8 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-import org.apache.commons.io.FilenameUtils;
 import org.apache.maven.model.Resource;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -21,6 +19,7 @@ import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.project.MavenProject;
+import org.codehaus.plexus.util.DirectoryScanner;
 
 /**
  * Goal which touches a timestamp file.
@@ -61,28 +60,24 @@ public class ResourceIndex extends AbstractMojo {
 			getLog().info("Reading resources from " + r.getDirectory());
 			Path path = Path.of(r.getDirectory());
 			Path target = Path.of(r.getTargetPath() == null ? "" : r.getTargetPath());
-			List<String> absInclude = r.getIncludes().stream().map(i -> path.toAbsolutePath().toString() + "/" + i).collect(Collectors.toList());
-			List<String> absExclude = r.getExcludes().stream().map(e -> path.toAbsolutePath().toString() + "/" + e).collect(Collectors.toList());
-			getLog().debug("Include: " + absInclude + ", Exclude: " + absExclude);
-			Predicate<String> include = f -> absInclude.isEmpty()
-				|| absInclude.stream().anyMatch(i -> FilenameUtils.wildcardMatch(f, i));
-			Predicate<String> exclude = f -> absExclude.stream().anyMatch(e -> FilenameUtils.wildcardMatch(f, e));
-			try {
-				Files.walk(path).forEach(f -> {
-					File file = f.toFile();
-					Path relative = path.relativize(f); // Resource path relative to the original resource directory
-					Path absolute = f.toAbsolutePath(); // Absolute path to the resource on disk
-					if(file.isFile()) {
-						if(!include.test(absolute.toString()) || exclude.test(absolute.toString())) return;
-						String targetPath = target.resolve(relative).toString();
-						if(excludeList.contains(targetPath)) return;
-						getLog().info("- " + path.relativize(f));
-						resources.add(targetPath); // Add the path relative to the JAR root (targetDir/relative)
-					}
-				});
-			} catch (IOException e) {
-				throw new MojoExecutionException("Failed to walk resources", e);
-			}
+			getLog().debug("Directory: " + r.getDirectory() + ", Include: " + r.getIncludes() + ", Exclude: " + r.getExcludes());
+
+			DirectoryScanner scanner = new DirectoryScanner();
+			scanner.setBasedir(r.getDirectory());
+			scanner.setIncludes(r.getIncludes().toArray(String[]::new));
+			scanner.setExcludes(r.getExcludes().toArray(String[]::new));
+			scanner.scan();
+
+			Arrays.stream(scanner.getIncludedFiles()).forEach(f -> {
+				File file = new File(r.getDirectory(), f);
+				Path relative = path.relativize(file.toPath()); // Resource path relative to the original resource directory
+				if(file.isFile()) {
+					String targetPath = target.resolve(f).toString();
+					if(excludeList.contains(targetPath)) return;
+					getLog().info("- " + relative);
+					resources.add(targetPath); // Add the path relative to the JAR root (targetDir/relative)
+				}
+			});
 		}
 
 		Path idxPath = Path.of(mavenProject.getBuild().getOutputDirectory(), targetPath);
