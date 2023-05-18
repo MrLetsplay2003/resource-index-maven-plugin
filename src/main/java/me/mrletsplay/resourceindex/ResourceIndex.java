@@ -64,7 +64,7 @@ public class ResourceIndex extends AbstractMojo {
 
 			DirectoryScanner scanner = new DirectoryScanner();
 			scanner.setBasedir(r.getDirectory());
-			scanner.setIncludes(r.getIncludes().toArray(String[]::new));
+			if(r.getIncludes().size() > 0) scanner.setIncludes(r.getIncludes().toArray(String[]::new));
 			scanner.setExcludes(r.getExcludes().toArray(String[]::new));
 			scanner.scan();
 
